@@ -22,6 +22,7 @@ const run = async () => {
     const db = client.db("jobbox");
     const userCollection = db.collection("user");
     const jobCollection = db.collection("job");
+    const chatCollection = db.collection("chat");
 
     app.post("/user", async (req, res) => {
       const user = req.body;
@@ -47,10 +48,12 @@ const run = async () => {
       const userId = req.body.userId;
       const jobId = req.body.jobId;
       const email = req.body.email;
+      const firstName = req.body.firstName;
+      const lastName = req.body.lastName;
 
       const filter = { _id: ObjectId(jobId) };
       const updateDoc = {
-        $push: { applicants: { id: ObjectId(userId), email } },
+        $push: { applicants: { id: ObjectId(userId), email, firstName, lastName } },
       };
 
       const result = await jobCollection.updateOne(filter, updateDoc);
@@ -126,6 +129,15 @@ const run = async () => {
       res.send({ status: false });
     });
 
+    app.get("/candidates/:jobId", async (req, res) => {
+      const jobId = req.params.jobId;
+      const query = { _id: ObjectId(jobId) };
+      const result = await jobCollection.findOne(query);
+      // const result = await cursor.toArray();
+
+      res.send({ status: true, data: result });
+    });
+
     app.get("/applied-jobs/:email", async (req, res) => {
       const email = req.params.email;
       const query = { applicants: { $elemMatch: { email: email } } };
@@ -173,6 +185,53 @@ const run = async () => {
 
       const result = await jobCollection.insertOne(job);
       res.send({ status: true, data: result });
+    });
+
+
+    app.post("/send-message", async (req, res) => {
+      const { message, sendAt, sendFrom, sendTo } = req.body;
+      const filter1 = { user1: sendFrom, user2: sendTo }
+      const filter2 = { user1: sendTo, user2: sendFrom }
+      const found = await chatCollection.findOne({ $or: [filter1, filter2] });
+
+      if (found) {
+        const updateDoc = {
+          $push: { messages: { sendFrom, sendAt, text: message } },
+        };
+        // console.log(found._id)
+        const result = await chatCollection.updateOne({ _id: ObjectId(found._id) }, updateDoc);
+        res.send({ status: true, data: result });
+      }
+
+      else {
+        const doc = {
+          user1: sendFrom,
+          user2: sendTo,
+          messages: [
+            {
+              sendFrom,
+              sendAt,
+              text: message
+            }
+          ]
+        }
+        const result = await chatCollection.insertOne(doc);
+        res.send({ status: true, data: result });
+      }
+    });
+
+
+    app.get("/get-messages/:user1/:user2", async (req, res) => {
+      //current user er email verfiy korte hobe..
+      //current user er email user1 othoba user2 hole, data pathaite hobe... otherwise error message pathaite hbe
+
+      const { user1, user2 } = req.params;
+      console.log(user1, user2);
+      const filter1 = { user1: user1, user2: user2 }
+      const filter2 = { user1: user2, user2: user1 }
+      const found = await chatCollection.findOne({ $or: [filter1, filter2] });
+      // console.log(found);
+      res.send({ status: true, data: found?.messages });
     });
 
 
