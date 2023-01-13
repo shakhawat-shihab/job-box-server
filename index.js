@@ -254,7 +254,7 @@ const run = async () => {
 
     app.post("/job", async (req, res) => {
       const { employerId, ...all } = req.body;
-      const job = { ...all, employerId: ObjectId(employerId) }
+      const job = { ...all, employerId: ObjectId(employerId), applicationCount: 0 }
 
       const result = await jobCollection.insertOne(job);
       res.send({ status: true, data: result });
