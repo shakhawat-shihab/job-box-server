@@ -53,7 +53,8 @@ const run = async () => {
 
       const filter = { _id: ObjectId(jobId) };
       const updateDoc = {
-        $push: { applicants: { id: ObjectId(userId), email, firstName, lastName } },
+        $push: { applicants: { id: ObjectId(userId), email, firstName, lastName, status: 'pending' } },
+        $inc: { applicationCount: 1 }
       };
 
       const result = await jobCollection.updateOne(filter, updateDoc);
@@ -65,6 +66,40 @@ const run = async () => {
 
       res.send({ status: false });
     });
+
+
+    app.patch("/approve-job", async (req, res) => {
+      const applicantId = req.body.applicantId;
+      const jobId = req.body.jobId;
+
+      const filter = { _id: ObjectId(jobId) };
+
+      const updateDoc = {
+        $set: {
+          "applicants.$[user].status": "approved",
+        },
+      };
+
+      const arrayFilter = {
+        arrayFilters: [{ "user.id": ObjectId(applicantId) }],
+      };
+
+      const result = await jobCollection.updateOne(
+        filter,
+        updateDoc,
+        arrayFilter
+      );
+
+      if (result.acknowledged) {
+        return res.send({ status: true, data: result });
+      }
+
+      res.send({ status: false });
+
+
+
+    });
+
 
     app.patch("/query", async (req, res) => {
       const userId = req.body.userId;
@@ -112,6 +147,8 @@ const run = async () => {
           "queries.$[user].reply": reply,
         },
       };
+
+      //array filter er maddome $[user] er moddhe array er index pass hoitase
       const arrayFilter = {
         arrayFilters: [{ "user.id": ObjectId(userId), "user.time": time }],
       };
@@ -141,11 +178,47 @@ const run = async () => {
     app.get("/applied-jobs/:email", async (req, res) => {
       const email = req.params.email;
       const query = { applicants: { $elemMatch: { email: email } } };
-      const cursor = jobCollection.find(query).project({ applicants: 0 });
+      const cursor = await jobCollection.find(query).project({
+        applicants: 1,
+        companyName: 1,
+        position: 1,
+        location: 1,
+        experience: 1,
+        workLevel: 1,
+        employmentType: 1,
+        salaryRange: 1,
+        skills: 1,
+        requirements: 1,
+        responsibilities: 1,
+        overview: 1,
+        queries: 1,
+        isClosed: 1,
+        applicants: 1,
+        employerEmail: 1,
+        createdAt: 1,
+        _id: 1,
+      });
       const result = await cursor.toArray();
 
-      res.send({ status: true, data: result });
+      //BANGLA SYSTEM
+      const output = result.map(x => {
+        x.applicants?.map(applicant => {
+          if (applicant.email == email && applicant.status == "approved") {
+            x.status = "approved";
+          }
+          else {
+            x.status = "pending";
+          }
+        })
+        x.applicants = [];
+        return x;
+      })
+
+
+      res.send({ status: true, data: output });
     });
+
+
 
     app.get("/my-jobs/:email", async (req, res) => {
       const email = req.params.email;
